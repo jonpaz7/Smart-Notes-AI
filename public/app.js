@@ -425,14 +425,355 @@ document.addEventListener('DOMContentLoaded', () => {
     if (confirm('האם לאפס את הנתונים ולהתחיל מחדש?')) {
       window.SmartNotesState.selectedFile = null;
       window.SmartNotesState.currentSummary = null;
+      window.SmartNotesState.currentSourceText = null;
+      window.SmartNotesState.currentQuiz = null;
+      currentQuizQuestions = null;
+      lastQuizSummaryHash = null;
+
       fileInput.value = '';
       rawTextInput.value = '';
       charCount.textContent = '0';
       filePreview.classList.add('hidden');
       dropzoneEmpty.classList.remove('hidden');
       resultsCard.classList.add('hidden');
+
+      if (branch2QuizContainer) {
+        branch2QuizContainer.className = 'branch-placeholder';
+        branch2QuizContainer.innerHTML = `
+          <div class="placeholder-icon">🎯</div>
+          <h3>אזור פיצ'ר ענף 2: בוחן הבנה אמריקאי מבוסס AI</h3>
+          <p>חלק זה ימומש בענף <code>feature/quiz-generator</code> באמצעות Gemini AI.</p>
+          <p class="placeholder-hint">הנחיות מלאות בקובץ <code>BRANCH_PROMPT_2_QUIZ.md</code>.</p>
+        `;
+      }
+
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   });
+
+  // ====================================================================
+  // 🧠 ענף 2: בוחן הבנה וציון אמריקאי (feature/quiz-generator)
+  // ====================================================================
+  const branch2NavTab = document.getElementById('branch2-nav-tab');
+  const branch2QuizContainer = document.getElementById('branch-2-quiz-container');
+
+  let currentQuizQuestions = null;
+  let isGeneratingQuiz = false;
+  let lastQuizSummaryHash = null;
+
+  function getSummaryTextForQuiz() {
+    const s = window.SmartNotesState.currentSummary;
+    if (!s) return '';
+    let text = '';
+    if (s.title) text += `# ${s.title}\n\n`;
+    if (s.executiveSummary) text += `## תקציר:\n${s.executiveSummary}\n\n`;
+    if (Array.isArray(s.keyTopics) && s.keyTopics.length > 0) {
+      text += `## נושאים מרכזיים:\n`;
+      s.keyTopics.forEach(t => {
+        text += `- ${t.topic}: ${t.details}\n`;
+      });
+      text += '\n';
+    }
+    if (Array.isArray(s.keyTakeaways) && s.keyTakeaways.length > 0) {
+      text += `## דגשים ומסקנות:\n`;
+      s.keyTakeaways.forEach(k => {
+        text += `- ${k}\n`;
+      });
+    }
+    if (window.SmartNotesState.currentSourceText) {
+      text += `\n\n## טקסט מקור:\n${window.SmartNotesState.currentSourceText.slice(0, 10000)}`;
+    }
+    return text.trim();
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  async function generateAndRenderQuiz(forceRegenerate = false) {
+    if (!window.SmartNotesState.currentSummary) {
+      branch2QuizContainer.className = 'branch-placeholder';
+      branch2QuizContainer.innerHTML = `
+        <div class="placeholder-icon">ℹ️</div>
+        <h3>טרם הופק סיכום</h3>
+        <p>כדי ליצור בוחן הבנה אמריקאי, יש לסכם מסמך PDF או טקסט תחילה.</p>
+      `;
+      return;
+    }
+
+    const summaryText = getSummaryTextForQuiz();
+    if (!summaryText) {
+      alert('לא נמצא תוכן סיכום ליצירת בוחן.');
+      return;
+    }
+
+    // אם כבר נוצר שאלון עבור אותו הסיכום ולא נדרש ריענון כפוי, לא מפיקים מחדש
+    if (!forceRegenerate && currentQuizQuestions && lastQuizSummaryHash === summaryText) {
+      return;
+    }
+
+    if (isGeneratingQuiz) return;
+    isGeneratingQuiz = true;
+
+    branch2QuizContainer.className = 'quiz-container loading';
+    branch2QuizContainer.innerHTML = `
+      <div class="quiz-loading-state">
+        <div class="spinner large-spinner"></div>
+        <h3>Gemini AI מנתח ומחולל בוחן הבנה...</h3>
+        <p>מנסח 3–4 שאלות אמריקאיות עם תשובות נכונות והסברים מפורטים</p>
+      </div>
+    `;
+
+    try {
+      const localKey = getActiveApiKey();
+      const headers = { 'Content-Type': 'application/json' };
+      if (localKey) {
+        headers['x-gemini-api-key'] = localKey;
+      }
+
+      const languageSelect = document.getElementById('language-select');
+      const language = languageSelect ? languageSelect.value : 'he';
+
+      const response = await fetch('/api/quiz', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+          text: summaryText,
+          language: language
+        })
+      });
+
+      const data = await response.json();
+
+      if (!data.success || !data.quiz) {
+        throw new Error(data.error || 'נכשלה יצירת הבוחן מול השרת.');
+      }
+
+      currentQuizQuestions = data.quiz;
+      lastQuizSummaryHash = summaryText;
+      window.SmartNotesState.currentQuiz = data.quiz;
+
+      renderQuizUI(currentQuizQuestions);
+
+    } catch (err) {
+      console.error('Quiz Generation Error:', err);
+      branch2QuizContainer.className = 'branch-placeholder';
+      branch2QuizContainer.innerHTML = `
+        <div class="placeholder-icon">❌</div>
+        <h3>שגיאה ביצירת הבוחן</h3>
+        <p style="color: var(--danger); margin-bottom: 1rem;">${escapeHtml(err.message)}</p>
+        <button type="button" class="primary-btn" id="retry-quiz-fetch-btn">🔄 נסה שוב</button>
+      `;
+      document.getElementById('retry-quiz-fetch-btn')?.addEventListener('click', () => {
+        generateAndRenderQuiz(true);
+      });
+    } finally {
+      isGeneratingQuiz = false;
+    }
+  }
+
+  function renderQuizUI(questions) {
+    if (!Array.isArray(questions) || questions.length === 0) {
+      branch2QuizContainer.className = 'branch-placeholder';
+      branch2QuizContainer.innerHTML = `
+        <div class="placeholder-icon">⚠️</div>
+        <h3>לא התקבלו שאלות</h3>
+        <p>ה-AI לא הצליח להפיק שאלות מהטקסט שסופק.</p>
+        <button type="button" class="primary-btn mt-3" id="retry-empty-quiz-btn">🔄 נסה שוב</button>
+      `;
+      document.getElementById('retry-empty-quiz-btn')?.addEventListener('click', () => {
+        generateAndRenderQuiz(true);
+      });
+      return;
+    }
+
+    branch2QuizContainer.className = 'quiz-container';
+
+    let html = `
+      <div class="quiz-header-banner">
+        <div>
+          <h3>🧠 בוחן הבנה אמריקאי (AI Quiz)</h3>
+          <p class="quiz-subtitle">ענו על ${questions.length} השאלות הבאות ובדקו את הבנתכם בחומר המסוכם</p>
+        </div>
+        <button type="button" class="icon-btn" id="regenerate-quiz-btn" title="חולל בוחן חדש עם שאלות שונות">
+          🔄 <span>שאלות חדשות</span>
+        </button>
+      </div>
+
+      <div class="quiz-score-banner hidden" id="quiz-score-banner"></div>
+
+      <form id="quiz-form" class="quiz-form">
+    `;
+
+    questions.forEach((q, qIndex) => {
+      html += `
+        <div class="quiz-question-card" id="quiz-q-${qIndex}">
+          <div class="quiz-question-header">
+            <span class="quiz-q-num">שאלה ${qIndex + 1} מתוך ${questions.length}</span>
+            <h4 class="quiz-q-text">${escapeHtml(q.question)}</h4>
+          </div>
+          <div class="quiz-options-list">
+      `;
+
+      (q.options || []).forEach((opt, optIndex) => {
+        const optionId = `q_${qIndex}_opt_${optIndex}`;
+        html += `
+          <label class="quiz-option-label" for="${optionId}" data-opt-index="${optIndex}">
+            <input type="radio" name="question_${qIndex}" id="${optionId}" value="${optIndex}">
+            <span class="custom-radio"></span>
+            <span class="option-text">${escapeHtml(opt)}</span>
+          </label>
+        `;
+      });
+
+      html += `
+          </div>
+          <div class="quiz-explanation hidden" id="quiz-expl-${qIndex}">
+            <div class="expl-icon">💡</div>
+            <div>
+              <strong>הסבר ה-AI:</strong>
+              <span class="expl-text">${escapeHtml(q.explanation || '')}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+
+    html += `
+        <div class="quiz-footer-actions">
+          <button type="button" class="primary-btn" id="submit-quiz-btn">
+            <span>✓ בדוק תשובות וחשב ציון</span>
+          </button>
+          <button type="button" class="secondary-btn hidden" id="retry-answers-btn">
+            <span>🔄 נסה שוב</span>
+          </button>
+        </div>
+      </form>
+    `;
+
+    branch2QuizContainer.innerHTML = html;
+
+    // אירוע "שאלות חדשות"
+    document.getElementById('regenerate-quiz-btn')?.addEventListener('click', () => {
+      generateAndRenderQuiz(true);
+    });
+
+    const submitQuizBtn = document.getElementById('submit-quiz-btn');
+    const retryAnswersBtn = document.getElementById('retry-answers-btn');
+    const scoreBanner = document.getElementById('quiz-score-banner');
+
+    // אירוע "בדוק תשובות"
+    submitQuizBtn?.addEventListener('click', () => {
+      let correctCount = 0;
+      let answeredCount = 0;
+
+      questions.forEach((q, qIndex) => {
+        const questionCard = document.getElementById(`quiz-q-${qIndex}`);
+        const selectedRadio = questionCard.querySelector(`input[name="question_${qIndex}"]:checked`);
+        const explanationEl = document.getElementById(`quiz-expl-${qIndex}`);
+        const optionLabels = questionCard.querySelectorAll('.quiz-option-label');
+        const correctIndex = Number(q.correctAnswerIndex);
+
+        optionLabels.forEach(l => l.classList.remove('correct', 'incorrect', 'correct-target'));
+
+        if (selectedRadio) {
+          answeredCount++;
+          const selectedIndex = parseInt(selectedRadio.value, 10);
+          if (selectedIndex === correctIndex) {
+            correctCount++;
+            if (optionLabels[selectedIndex]) {
+              optionLabels[selectedIndex].classList.add('correct');
+            }
+          } else {
+            if (optionLabels[selectedIndex]) {
+              optionLabels[selectedIndex].classList.add('incorrect');
+            }
+            if (optionLabels[correctIndex]) {
+              optionLabels[correctIndex].classList.add('correct-target');
+            }
+          }
+        } else {
+          // שאלה שלא נענתה - נסמן את הנכונה
+          if (optionLabels[correctIndex]) {
+            optionLabels[correctIndex].classList.add('correct-target');
+          }
+        }
+
+        // נעילת כפתורי הבחירה
+        questionCard.querySelectorAll('input[type="radio"]').forEach(r => r.disabled = true);
+
+        // הצגת כרטיסיית ההסבר
+        if (explanationEl) {
+          explanationEl.classList.remove('hidden');
+        }
+      });
+
+      const total = questions.length;
+      const score = Math.round((correctCount / total) * 100);
+
+      let feedbackClass = 'score-high';
+      let feedbackText = 'מעולה! שליטה מלאה בחומר הנלמד! 🏆';
+      if (score < 60) {
+        feedbackClass = 'score-low';
+        feedbackText = 'כדאי לחזור על החומר ולקרוא את ההסברים 📚';
+      } else if (score < 85) {
+        feedbackClass = 'score-mid';
+        feedbackText = 'עבודה טובה! הבנה טובה של רוב הנושאים 👏';
+      }
+
+      scoreBanner.className = `quiz-score-banner ${feedbackClass}`;
+      scoreBanner.innerHTML = `
+        <div class="score-number">${score}</div>
+        <div class="score-details">
+          <h4>${feedbackText}</h4>
+          <p>ענית נכון על ${correctCount} מתוך ${total} שאלות (${score}%)</p>
+        </div>
+      `;
+      scoreBanner.classList.remove('hidden');
+      scoreBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      submitQuizBtn.classList.add('hidden');
+      retryAnswersBtn.classList.remove('hidden');
+    });
+
+    // אירוע "נסה שוב"
+    retryAnswersBtn?.addEventListener('click', () => {
+      questions.forEach((q, qIndex) => {
+        const questionCard = document.getElementById(`quiz-q-${qIndex}`);
+        const explanationEl = document.getElementById(`quiz-expl-${qIndex}`);
+        const optionLabels = questionCard.querySelectorAll('.quiz-option-label');
+
+        optionLabels.forEach(l => {
+          l.classList.remove('correct', 'incorrect', 'correct-target');
+        });
+
+        questionCard.querySelectorAll('input[type="radio"]').forEach(r => {
+          r.disabled = false;
+          r.checked = false;
+        });
+
+        if (explanationEl) {
+          explanationEl.classList.add('hidden');
+        }
+      });
+
+      scoreBanner.classList.add('hidden');
+      submitQuizBtn.classList.remove('hidden');
+      retryAnswersBtn.classList.add('hidden');
+    });
+  }
+
+  // 1. האזנה ללחיצה על הלשונית של ענף 2
+  if (branch2NavTab) {
+    branch2NavTab.addEventListener('click', () => {
+      generateAndRenderQuiz(false);
+    });
+  }
 
 });

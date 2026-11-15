@@ -733,6 +733,289 @@ code {
   display: none !important;
 }
 
+/* ==================================================================== */
+/* ענף 2: סגנונות עבור בוחן הבנה אמריקאי (feature/quiz-generator) */
+/* ==================================================================== */
+
+.quiz-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.quiz-container.loading {
+  padding: 3rem 1.5rem;
+  text-align: center;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.quiz-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.large-spinner {
+  width: 40px;
+  height: 40px;
+  border-width: 3px;
+  border-top-color: var(--accent-primary);
+}
+
+.quiz-header-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.quiz-header-banner h3 {
+  font-size: 1.3rem;
+  color: #e0e7ff;
+  margin-bottom: 0.25rem;
+}
+
+.quiz-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.quiz-score-banner {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--radius-md);
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.quiz-score-banner.score-high {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid var(--success);
+}
+
+.quiz-score-banner.score-mid {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid var(--warning);
+}
+
+.quiz-score-banner.score-low {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid var(--danger);
+}
+
+.score-number {
+  font-size: 2.5rem;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  min-width: 80px;
+  text-align: center;
+  line-height: 1;
+}
+
+.score-high .score-number { color: #34d399; }
+.score-mid .score-number { color: #fbbf24; }
+.score-low .score-number { color: #f87171; }
+
+.score-details h4 {
+  font-size: 1.15rem;
+  margin-bottom: 0.25rem;
+  color: var(--text-main);
+}
+
+.score-details p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.quiz-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.quiz-question-card {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.25rem 1.5rem;
+  transition: border-color 0.2s;
+}
+
+.quiz-question-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.quiz-question-header {
+  margin-bottom: 1rem;
+}
+
+.quiz-q-num {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.15);
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  margin-bottom: 0.5rem;
+}
+
+.quiz-q-text {
+  font-size: 1.05rem;
+  color: var(--text-main);
+  line-height: 1.5;
+}
+
+.quiz-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.quiz-option-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.quiz-option-label:hover {
+  background: rgba(51, 65, 85, 0.6);
+  border-color: var(--border-focus);
+}
+
+.quiz-option-label input[type="radio"] {
+  display: none;
+}
+
+.custom-radio {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--text-muted);
+  border-radius: 50%;
+  display: inline-block;
+  position: relative;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.quiz-option-label input[type="radio"]:checked + .custom-radio {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  box-shadow: inset 0 0 0 3px var(--bg-secondary);
+}
+
+.option-text {
+  font-size: 0.95rem;
+  color: var(--text-main);
+  flex: 1;
+}
+
+/* תוצאות בדיקה */
+.quiz-option-label.correct {
+  background: rgba(16, 185, 129, 0.2) !important;
+  border-color: var(--success) !important;
+  color: #6ee7b7;
+}
+
+.quiz-option-label.correct .custom-radio {
+  border-color: var(--success) !important;
+  background: var(--success) !important;
+  box-shadow: inset 0 0 0 3px var(--bg-secondary);
+}
+
+.quiz-option-label.correct::after {
+  content: '✓ תשובה נכונה';
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #34d399;
+  margin-right: auto;
+}
+
+.quiz-option-label.incorrect {
+  background: rgba(239, 68, 68, 0.2) !important;
+  border-color: var(--danger) !important;
+  color: #fca5a5;
+}
+
+.quiz-option-label.incorrect .custom-radio {
+  border-color: var(--danger) !important;
+  background: var(--danger) !important;
+  box-shadow: inset 0 0 0 3px var(--bg-secondary);
+}
+
+.quiz-option-label.incorrect::after {
+  content: '✕ תשובה שגויה';
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #f87171;
+  margin-right: auto;
+}
+
+.quiz-option-label.correct-target {
+  border: 2px dashed var(--success) !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+}
+
+.quiz-option-label.correct-target::after {
+  content: '★ זו התשובה הנכונה';
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #34d399;
+  margin-right: auto;
+}
+
+/* הסבר לשאלה */
+.quiz-explanation {
+  margin-top: 1rem;
+  padding: 0.9rem 1.1rem;
+  background: rgba(99, 102, 241, 0.1);
+  border-right: 3px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  animation: fadeIn 0.25s ease-in-out;
+}
+
+.expl-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.expl-text {
+  font-size: 0.9rem;
+  color: #cbd5e1;
+  margin-right: 0.4rem;
+}
+
+.quiz-footer-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-start;
+  margin-top: 0.5rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @media (max-width: 640px) {
   .options-bar {
     flex-direction: column;
