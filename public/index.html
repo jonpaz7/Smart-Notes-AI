@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartNotes AI - סיכום חכם של פגישות ו-PDF עם Gemini AI</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- כותרת ראשית ומצב חיבור ל-Gemini -->
+    <header class="header">
+      <div class="logo-area">
+        <div class="logo-icon">✨</div>
+        <div>
+          <h1>SmartNotes <span class="gradient-text">AI</span></h1>
+          <p class="subtitle">סיכום חי של מסמכי PDF והרצאות באמצעות Google Gemini AI</p>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <button type="button" class="api-key-btn" id="open-key-modal-btn">
+          <span class="key-icon">🔑</span>
+          <span id="api-status-label">הגדרת Gemini Key</span>
+        </button>
+        <div class="status-pill" id="system-status">
+          <span class="status-dot"></span>
+          <span id="status-text">בודק מפתח...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- אזור הזנת מידע -->
+    <main class="main-content">
+      <section class="card input-card">
+        
+        <!-- בחירת מקור קלט: PDF או טקסט -->
+        <div class="input-tabs">
+          <button type="button" class="tab-btn active" data-tab="pdf">
+            <span class="tab-icon">📄</span> העלאת קובץ PDF
+          </button>
+          <button type="button" class="tab-btn" data-tab="text">
+            <span class="tab-icon">✍️</span> הדבקת טקסט / תמלול
+          </button>
+        </div>
+
+        <!-- טופס שליחה -->
+        <form id="summarize-form">
+          
+          <!-- קלט PDF -->
+          <div class="tab-content active" id="tab-pdf">
+            <div class="dropzone" id="dropzone">
+              <input type="file" id="pdf-file-input" accept=".pdf,application/pdf" hidden>
+              <div class="dropzone-content" id="dropzone-empty">
+                <div class="upload-icon">📂</div>
+                <h3>גררו לכאן קובץ PDF או <span class="browse-link">לחצו לבחירה</span></h3>
+                <p class="hint">תומך בקובצי PDF של הרצאות, פרוטוקולים ומאמרים (עד 15MB)</p>
+              </div>
+              <div class="file-preview hidden" id="file-preview">
+                <span class="pdf-badge">PDF</span>
+                <div class="file-details">
+                  <strong id="file-name">filename.pdf</strong>
+                  <span id="file-size" class="hint">0 KB</span>
+                </div>
+                <button type="button" class="remove-file-btn" id="remove-file-btn" title="הסר קובץ">✕</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- קלט טקסט ישיר -->
+          <div class="tab-content" id="tab-text">
+            <div class="textarea-wrapper">
+              <textarea 
+                id="raw-text-input" 
+                placeholder="הדביקו כאן תמלול שיחה, פגישה, סיכומי שיעור או כל טקסט שתרצו לסכם ב-Gemini AI..."
+                rows="8"
+              ></textarea>
+              <div class="char-counter"><span id="char-count">0</span> תווים</div>
+            </div>
+          </div>
+
+          <!-- הגדרות סיכום -->
+          <div class="options-bar">
+            <div class="option-group">
+              <label for="depth-select">עומק הסיכום ב-AI:</label>
+              <select id="depth-select" class="custom-select">
+                <option value="detailed" selected>מקיף ומפורט (מומלץ)</option>
+                <option value="brief">תמציתי וממוקד (נקודות עיקריות)</option>
+              </select>
+            </div>
+
+            <div class="option-group">
+              <label for="language-select">שפת הסיכום:</label>
+              <select id="language-select" class="custom-select">
+                <option value="he" selected>עברית</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+
+            <button type="submit" class="primary-btn" id="submit-btn">
+              <span class="btn-text">✨ סכם באמצעות Gemini AI</span>
+              <span class="spinner hidden"></span>
+            </button>
+          </div>
+
+        </form>
+      </section>
+
+      <!-- אזור התוצאות -->
+      <section class="card results-card hidden" id="results-card">
+        
+        <!-- כותרת תוצאות וטאבים לפיצ'רים -->
+        <div class="results-header">
+          <div>
+            <h2 id="result-title">סיכום המסמך</h2>
+            <div class="meta-tags" id="result-meta">
+              <span class="tag" id="meta-type">📄 PDF</span>
+              <span class="tag" id="meta-pages">1 עמודים</span>
+              <span class="tag" id="meta-length">0 תווים</span>
+              <span class="tag ai-tag" id="meta-model">🤖 Gemini 3.8 Flash</span>
+            </div>
+          </div>
+
+          <!-- פעולות מהירות -->
+          <div class="action-buttons">
+            <button type="button" class="icon-btn" id="copy-btn" title="העתק סיכום">
+              📋 <span>העתק</span>
+            </button>
+            <button type="button" class="icon-btn" id="download-btn" title="הורד קובץ">
+              📥 <span>Markdown</span>
+            </button>
+            <button type="button" class="icon-btn danger" id="reset-btn" title="נקה והתחל מחדש">
+              🔄 <span>איפוס</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- תפריט לשוניות תוצאה: בסיס + ענף 1 + ענף 2 -->
+        <div class="result-navigation-tabs">
+          <button type="button" class="subtab-btn active" data-subtab="summary-view">
+            📑 סיכום ראשי (AI)
+          </button>
+          <button type="button" class="subtab-btn" data-subtab="branch1-view" id="branch1-nav-tab">
+            ✅ משימות ויומן <span class="branch-pill">ענף 1</span>
+          </button>
+          <button type="button" class="subtab-btn" data-subtab="branch2-view" id="branch2-nav-tab">
+            🧠 בוחן הבנה <span class="branch-pill">ענף 2</span>
+          </button>
+        </div>
+
+        <!-- תצוגת סיכום ראשי (ענף Main) -->
+        <div class="subtab-content active" id="summary-view">
+          
+          <!-- תקציר מנהלים -->
+          <div class="summary-section">
+            <h3 class="section-title">💡 תקציר מנהלים</h3>
+            <p id="executive-summary" class="executive-summary-text"></p>
+          </div>
+
+          <!-- נושאים מרכזיים -->
+          <div class="summary-section">
+            <h3 class="section-title">📌 נושאים מרכזיים שנדונו</h3>
+            <div id="key-topics-list" class="topics-grid"></div>
+          </div>
+
+          <!-- תובנות ומסקנות -->
+          <div class="summary-section">
+            <h3 class="section-title">🎯 מסקנות ודגשים מרכזיים</h3>
+            <ul id="key-takeaways-list" class="takeaways-list"></ul>
+          </div>
+        </div>
+
+        <!-- תצוגת ענף 1: משימות ואירועים (ממתין לענף feature/action-items) -->
+        <div class="subtab-content" id="branch1-view">
+          <div class="branch-placeholder" id="branch-1-tasks-container">
+            <div class="placeholder-icon">🛠️</div>
+            <h3>אזור פיצ'ר ענף 1: חילוץ משימות וייצוא ליומן</h3>
+            <p>חלק זה ימומש בענף <code>feature/action-items</code> באמצעות Gemini AI.</p>
+            <p class="placeholder-hint">הנחיות מלאות בקובץ <code>BRANCH_PROMPT_1_TASKS.md</code>.</p>
+          </div>
+        </div>
+
+        <!-- תצוגת ענף 2: שאלון וכרטיסיות (ממתין לענף feature/quiz-generator) -->
+        <div class="subtab-content" id="branch2-view">
+          <div class="branch-placeholder" id="branch-2-quiz-container">
+            <div class="placeholder-icon">🎯</div>
+            <h3>אזור פיצ'ר ענף 2: בוחן הבנה אמריקאי מבוסס AI</h3>
+            <p>חלק זה ימומש בענף <code>feature/quiz-generator</code> באמצעות Gemini AI.</p>
+            <p class="placeholder-hint">הנחיות מלאות בקובץ <code>BRANCH_PROMPT_2_QUIZ.md</code>.</p>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- מודל להגדרת מפתח Gemini API -->
+    <div class="modal-overlay hidden" id="api-key-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>🔑 הגדרת מפתח Google Gemini API</h3>
+          <button type="button" class="close-modal-btn" id="close-modal-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <p>הזינו כאן את מפתח ה-API שלכם כדי לקבל סיכומי AI חיים ומדויקים:</p>
+          <div class="input-field-group">
+            <input 
+              type="password" 
+              id="api-key-input" 
+              placeholder="AIzaSy..." 
+              autocomplete="off"
+            >
+            <button type="button" class="toggle-visibility-btn" id="toggle-key-visibility">👁️</button>
+          </div>
+          <div class="modal-helper">
+            <span>אין לכם עדיין מפתח?</span>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">הוציאו מפתח בחינם ב-Google AI Studio ↗</a>
+          </div>
+          <div id="key-test-feedback" class="feedback-msg hidden"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="secondary-btn" id="cancel-modal-btn">ביטול</button>
+          <button type="button" class="primary-btn" id="save-key-btn">בדוק ושמור מפתח</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>SmartNotes AI &bull; מופעל על ידי Google Gemini AI &bull; מוכן לעבודת צוות ומיזוג ב-Git</p>
+    </footer>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
