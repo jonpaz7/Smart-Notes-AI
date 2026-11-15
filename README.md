@@ -87,7 +87,7 @@ smartnotes-ai/
 
 1. **שכפול המאגר (Clone):**
    ```bash
-   git clone https://github.com/<your-username>/Smart-Notes-AI.git
+   git clone https://github.com/jonpaz7/Smart-Notes-AI
    cd Smart-Notes-AI
    ```
 
