@@ -4,7 +4,8 @@ window.SmartNotesState = {
   currentSummary: null,
   currentSourceText: null,
   activeTab: 'pdf',
-  hasServerKey: false
+  hasServerKey: false,
+  actionItems: []
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -59,6 +60,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const subtabButtons = document.querySelectorAll('.subtab-btn');
   const subtabContents = document.querySelectorAll('.subtab-content');
+  const branch1Tab = document.getElementById('branch1-nav-tab');
+  const actionItemsContainer = document.getElementById('branch-1-tasks-container');
+  let loadedActionItemsFor = null;
+  let actionItemsRequest = null;
+  let actionItemsRequestKey = null;
 
   // פונקציה להחזרת המפתח השמור (או מ-localStorage)
   function getActiveApiKey() {
@@ -293,6 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       window.SmartNotesState.currentSummary = result.data.summary;
+      window.SmartNotesState.actionItems = [];
       renderSummary(result.data);
 
     } catch (err) {
@@ -368,6 +375,9 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       const targetSubtab = btn.dataset.subtab;
       switchSubTab(targetSubtab);
+      if (btn === branch1Tab) {
+        loadActionItems();
+      }
     });
   });
 
@@ -378,6 +388,242 @@ document.addEventListener('DOMContentLoaded', () => {
     subtabContents.forEach(c => {
       c.classList.toggle('active', c.id === subtabId);
     });
+  }
+
+  function getSummaryText(summary) {
+    return [
+      summary.title,
+      summary.executiveSummary,
+      ...(summary.keyTopics || []).flatMap(topic => [topic.topic, topic.details]),
+      ...(summary.keyTakeaways || [])
+    ].filter(value => typeof value === 'string' && value.trim()).join('\n\n');
+  }
+
+  function showActionItemsMessage(message, isError = false) {
+    actionItemsContainer.replaceChildren();
+    const text = document.createElement('p');
+    text.className = isError ? 'action-items-error' : '';
+    text.textContent = message;
+    actionItemsContainer.appendChild(text);
+  }
+
+  async function loadActionItems() {
+    const summary = window.SmartNotesState.currentSummary;
+    if (!summary) {
+      showActionItemsMessage('יש ליצור סיכום לפני חילוץ משימות.');
+      return;
+    }
+
+    const summaryText = getSummaryText(summary);
+    const summaryKey = JSON.stringify(summary);
+    if (loadedActionItemsFor === summaryKey) {
+      return;
+    }
+    if (actionItemsRequest) {
+      const activeRequest = actionItemsRequest;
+      await activeRequest;
+      if (window.SmartNotesState.currentSummary &&
+          JSON.stringify(window.SmartNotesState.currentSummary) === summaryKey &&
+          loadedActionItemsFor !== summaryKey) {
+        return loadActionItems();
+      }
+      return;
+    }
+
+    loadedActionItemsFor = summaryKey;
+    showActionItemsMessage('מחלץ משימות מהסיכום...');
+    const headers = { 'Content-Type': 'application/json' };
+    const localKey = getActiveApiKey();
+    if (localKey) {
+      headers['x-gemini-api-key'] = localKey;
+    }
+
+    actionItemsRequestKey = summaryKey;
+    const request = (async () => {
+      try {
+        const response = await fetch('/api/action-items', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            text: summaryText,
+            language: document.getElementById('language-select').value
+          })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'שגיאה בחילוץ המשימות.');
+        }
+
+        if (!window.SmartNotesState.currentSummary ||
+            JSON.stringify(window.SmartNotesState.currentSummary) !== summaryKey) {
+          return;
+        }
+        window.SmartNotesState.actionItems = result.tasks;
+        renderActionItems(result.tasks);
+      } catch (error) {
+        if (window.SmartNotesState.currentSummary &&
+            JSON.stringify(window.SmartNotesState.currentSummary) === summaryKey) {
+          loadedActionItemsFor = null;
+          showActionItemsMessage(`לא ניתן לחלץ משימות: ${error.message}`, true);
+        }
+      } finally {
+        if (actionItemsRequestKey === summaryKey) {
+          actionItemsRequest = null;
+          actionItemsRequestKey = null;
+        }
+      }
+    })();
+    actionItemsRequest = request;
+
+    await request;
+  }
+
+  function renderActionItems(tasks) {
+    actionItemsContainer.replaceChildren();
+    actionItemsContainer.className = 'action-items-panel';
+
+    const heading = document.createElement('div');
+    heading.className = 'action-items-header';
+    const title = document.createElement('div');
+    const headingText = document.createElement('h3');
+    headingText.textContent = 'משימות לביצוע';
+    const description = document.createElement('p');
+    description.textContent = tasks.length
+      ? 'סמנו משימות שהושלמו או ייצאו משימות עם תאריך יעד ליומן.'
+      : 'לא נמצאו משימות ברורות לביצוע בסיכום.';
+    title.append(headingText, description);
+    heading.appendChild(title);
+
+    const datedTasks = tasks.filter(task => isValidCalendarDate(task.dueDate));
+    const exportButton = document.createElement('button');
+    exportButton.type = 'button';
+    exportButton.className = 'primary-btn calendar-export-btn';
+    exportButton.textContent = '📅 הורד קובץ יומן (.ics)';
+    exportButton.disabled = datedTasks.length === 0;
+    exportButton.title = datedTasks.length
+      ? `ייצוא ${datedTasks.length} משימות עם תאריך יעד`
+      : 'אין משימות עם תאריך יעד שניתן לייצא';
+    exportButton.addEventListener('click', () => downloadCalendarFile(datedTasks));
+    heading.appendChild(exportButton);
+    actionItemsContainer.appendChild(heading);
+
+    if (tasks.length) {
+      const dateNote = document.createElement('p');
+      dateNote.className = 'calendar-export-note';
+      dateNote.textContent = datedTasks.length === tasks.length
+        ? ''
+        : `${tasks.length - datedTasks.length} משימות ללא תאריך יעד מדויק לא ייכללו בקובץ היומן.`;
+      if (dateNote.textContent) actionItemsContainer.appendChild(dateNote);
+    }
+
+    const list = document.createElement('div');
+    list.className = 'action-items-list';
+    tasks.forEach(task => {
+      const card = document.createElement('label');
+      card.className = 'action-item-card';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.setAttribute('aria-label', `סמן כהושלמה: ${task.title}`);
+
+      const content = document.createElement('span');
+      content.className = 'action-item-content';
+      const taskTitle = document.createElement('strong');
+      taskTitle.textContent = task.title;
+      const taskDescription = document.createElement('span');
+      taskDescription.textContent = task.description;
+
+      const metadata = document.createElement('span');
+      metadata.className = 'action-item-meta';
+      const assignee = document.createElement('span');
+      assignee.textContent = `👤 ${task.assignee}`;
+      const dueDate = document.createElement('span');
+      dueDate.textContent = task.dueDate ? `📅 ${task.dueDate}` : '📅 ללא תאריך יעד';
+      const priority = document.createElement('span');
+      priority.className = `priority-badge priority-${task.priority}`;
+      priority.textContent = {
+        high: 'עדיפות גבוהה',
+        medium: 'עדיפות בינונית',
+        low: 'עדיפות נמוכה'
+      }[task.priority] || 'עדיפות בינונית';
+
+      metadata.append(assignee, dueDate, priority);
+      content.append(taskTitle, taskDescription, metadata);
+      card.append(checkbox, content);
+      list.appendChild(card);
+    });
+    actionItemsContainer.appendChild(list);
+  }
+
+  function escapeIcsText(value) {
+    return String(value || '')
+      .replace(/\\/g, '\\\\')
+      .replace(/\r?\n/g, '\\n')
+      .replace(/,/g, '\\,')
+      .replace(/;/g, '\\;');
+  }
+
+  function isValidCalendarDate(date) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return false;
+    }
+    const parsed = new Date(`${date}T00:00:00.000Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+  }
+
+  function foldIcsLine(line) {
+    const chunks = [];
+    let chunk = '';
+    let byteLength = 0;
+    for (const character of line) {
+      const characterBytes = new TextEncoder().encode(character).length;
+      if (byteLength + characterBytes > 75) {
+        chunks.push(chunk);
+        chunk = ' ';
+        byteLength = 1;
+      }
+      chunk += character;
+      byteLength += characterBytes;
+    }
+    chunks.push(chunk);
+    return chunks.join('\r\n');
+  }
+
+  function downloadCalendarFile(tasks) {
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//SmartNotes AI//Action Items//HE',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH'
+    ];
+
+    tasks.forEach((task, index) => {
+      const startDate = task.dueDate.replace(/-/g, '');
+      const due = new Date(`${task.dueDate}T00:00:00Z`);
+      due.setUTCDate(due.getUTCDate() + 1);
+      const endDate = due.toISOString().slice(0, 10).replace(/-/g, '');
+      lines.push(
+        'BEGIN:VEVENT',
+        `UID:${Date.now()}-${index}@smartnotes-ai`,
+        `DTSTAMP:${stamp}`,
+        `DTSTART;VALUE=DATE:${startDate}`,
+        `DTEND;VALUE=DATE:${endDate}`,
+        `SUMMARY:${escapeIcsText(task.title)}`,
+        `DESCRIPTION:${escapeIcsText(`${task.description}\nאחראי: ${task.assignee}`)}`,
+        'END:VEVENT'
+      );
+    });
+    lines.push('END:VCALENDAR');
+
+    const calendar = `${lines.map(foldIcsLine).join('\r\n')}\r\n`;
+    const blob = new Blob([calendar], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'smartnotes-action-items.ics';
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   // 8. פעולות מהירות (העתקה, הורדה, איפוס)

@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const { extractTextFromPDF } = require('./services/pdfService');
 const { generateSummary, getBestAvailableModel } = require('./services/aiService');
+const { extractActionItems } = require('./services/taskExtractor');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -150,9 +151,26 @@ app.post('/api/summarize', upload.single('pdfFile'), async (req, res) => {
 // 🚀 נקודות הרחבה לצוות עבור ענפי Git:
 // ====================================================================
 
-// [ענף 1 - משימות ולוח שנה (feature/action-items)]:
-// const { extractActionItems } = require('./services/taskExtractor');
-// app.post('/api/action-items', async (req, res) => { ... });
+// חילוץ משימות מתוך הסיכום באמצעות Gemini AI
+app.post('/api/action-items', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const { text, language } = body;
+    if (typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ success: false, error: 'לא סופק טקסט לחילוץ משימות.' });
+    }
+
+    const customApiKey = req.headers['x-gemini-api-key'] || body.apiKey;
+    const tasks = await extractActionItems(text, language || 'he', customApiKey);
+    res.json({ success: true, tasks });
+  } catch (error) {
+    console.error('שגיאה ב-POST /api/action-items:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'אירעה שגיאה בחילוץ המשימות.'
+    });
+  }
+});
 
 // [ענף 2 - מחולל בחנים (feature/quiz-generator)]:
 // const { generateQuiz } = require('./services/quizGenerator');
