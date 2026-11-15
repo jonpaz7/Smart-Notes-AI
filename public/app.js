@@ -686,10 +686,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (branch2QuizContainer) {
         branch2QuizContainer.className = 'branch-placeholder';
         branch2QuizContainer.innerHTML = `
-          <div class="placeholder-icon">🎯</div>
-          <h3>אזור פיצ'ר ענף 2: בוחן הבנה אמריקאי מבוסס AI</h3>
-          <p>חלק זה ימומש בענף <code>feature/quiz-generator</code> באמצעות Gemini AI.</p>
-          <p class="placeholder-hint">הנחיות מלאות בקובץ <code>BRANCH_PROMPT_2_QUIZ.md</code>.</p>
+          <div class="placeholder-icon">🧠</div>
+          <h3>בוחן הבנה אמריקאי</h3>
+          <p>בחרו בלשונית כדי ליצור שאלון אמריקאי לבדיקת הבנה באמצעות Gemini AI.</p>
         `;
       }
 
