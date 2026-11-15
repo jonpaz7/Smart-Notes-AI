@@ -155,8 +155,23 @@ app.post('/api/summarize', upload.single('pdfFile'), async (req, res) => {
 // app.post('/api/action-items', async (req, res) => { ... });
 
 // [ענף 2 - מחולל בחנים (feature/quiz-generator)]:
-// const { generateQuiz } = require('./services/quizGenerator');
-// app.post('/api/quiz', async (req, res) => { ... });
+const { generateQuiz } = require('./services/quizGenerator');
+
+app.post('/api/quiz', async (req, res) => {
+  try {
+    const { text, language } = req.body;
+    const customApiKey = req.headers['x-gemini-api-key'] || req.body.apiKey;
+
+    if (!text) {
+      return res.status(400).json({ success: false, error: 'לא סופק טקסט ליצירת בוחן.' });
+    }
+
+    const quiz = await generateQuiz(text, language || 'he', customApiKey);
+    res.json({ success: true, quiz });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // ====================================================================
 
